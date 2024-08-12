@@ -1,25 +1,7 @@
-const mysql = require('mysql');
-const dotenv = require('dotenv');
-const app = require('./app');
+const app = require('./app'); // Assuming your main file is named `app.js`
 
-dotenv.config({ path: './.env' });
+const PORT = process.env.PORT || 8000;
 
-const connection = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: '',
-  database: 'task_manager'
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
 });
-connection.connect((err) => {
-  if (err) {
-    console.error('Database connection failed: ' + err);
-    return;
-  }
-  console.log('Connected to database.');
-});
-module.exports = connection;
-
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`App running on port ${port}`);
-})

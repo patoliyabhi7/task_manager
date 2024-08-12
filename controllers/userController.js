@@ -1,10 +1,7 @@
-const appError = require('./../utils/appError.js')
-const catchAsync = require('./../utils/catchAsync.js')
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt')
-const connection = require('../server.js');
 
-exports.signup = catchAsync(async (req, res, next) => {
+exports.signup = (req, res) => {
     const { name, email, password, confirmPassword, role } = req.body;
     if (!name || !email || !password || !confirmPassword || !role) {
         return next(new appError('Please provide all the details', 400));
@@ -12,15 +9,39 @@ exports.signup = catchAsync(async (req, res, next) => {
     if (password !== confirmPassword) {
         return next(new appError('Password and confirm password do not match', 400));
     }
-    const pass = await bcrypt.hash(password, 12);
-    let sql = `INSERT INTO users(name, email, password, role) VALUES('${name}', '${email}', '${pass}', '${role}')`;  // Note: Table name should be 'userss' as defined in 'usertable.js'
-    connection.query(sql, (err, result) => {
+
+    const db = req.db;
+
+    // Check if the username or email already exists
+    const query = 'SELECT * FROM users WHERE email = ?';
+    db.query(query, [name, email, password, role], (err, results) => {
         if (err) {
-            return next(new appError(err, 400));
+            return res.status(500).json({ message: err });
         }
-        res.status(201).json({
-            status: 'success',
-            message: 'User created successfully'
+
+        if (results.length > 0) {
+            return res.status(409).json({ message: 'Username or Email already exists' });
+        }
+
+        // Hash the password
+        bcrypt.hash(password, 10, (err, hash) => {
+            if (err) {
+                return res.status(500).json({ message: 'Error hashing password' });
+            }
+
+            // Insert the new user into the database
+            const insertQuery = 'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)';
+            db.query(insertQuery, [name, email, hash, role], (err, result) => {
+                if (err) {
+                    return res.status(500).json({ message: err });
+                }
+
+                res.status(201).json({ message: 'User created successfully', userId: result.insertId });
+            });
         });
     });
-});
+};
+
+exports.login = (req, res) => {
+    // Example login logic
+};
