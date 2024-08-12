@@ -1,4 +1,3 @@
-// userController.js (or any other setup file)
 const con = require('../server.js');
 
 const sql = `CREATE TABLE IF NOT EXISTS users(
@@ -17,4 +16,3 @@ con.query(sql, (err, result) => {
         console.log('User table created or already exists.');
     }
 });
-    

@@ -1,4 +1,4 @@
-const app = require('./app'); // Assuming your main file is named `app.js`
+const app = require('./app'); 
 
 const PORT = process.env.PORT || 8000;
 

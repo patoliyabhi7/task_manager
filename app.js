@@ -10,8 +10,8 @@ app.use(cookieParser());
 // MySQL connection
 const db = mysql.createConnection({
     host: 'localhost',
-    user: 'root', // use your MySQL username
-    password: '', // use your MySQL password
+    user: 'root',
+    password: '', 
     database: 'task_manager'
 });
 
@@ -23,13 +23,11 @@ db.connect(err => {
     console.log('MySQL connected...');
 });
 
-// Make db accessible to the router
 app.use((req, res, next) => {
     req.db = db;
     next();
 });
 
-// Define routes
 app.get('/', (req, res) => {
     res.status(200).send("Welcome!!");
 });

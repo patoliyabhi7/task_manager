@@ -1,10 +1,9 @@
 const express = require('express');
-const userController = require('../controllers/userController'); // Update the path if needed
+const userController = require('../controllers/userController'); 
 
 const router = express.Router();
 
-// Define user-related routes here
 router.post('/signup', userController.signup);
-router.post('/login', userController.login); // Example route
+router.post('/login', userController.login); 
 
 module.exports = router;

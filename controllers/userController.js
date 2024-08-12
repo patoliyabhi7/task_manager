@@ -12,7 +12,6 @@ exports.signup = (req, res) => {
 
     const db = req.db;
 
-    // Check if the username or email already exists
     const query = 'SELECT * FROM users WHERE email = ?';
     db.query(query, [name, email, password, role], (err, results) => {
         if (err) {
@@ -23,7 +22,6 @@ exports.signup = (req, res) => {
             return res.status(409).json({ message: 'Username or Email already exists' });
         }
 
-        // Hash the password
         bcrypt.hash(password, 10, (err, hash) => {
             if (err) {
                 return res.status(500).json({ message: 'Error hashing password' });
