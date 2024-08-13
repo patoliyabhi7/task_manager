@@ -10,6 +10,7 @@ const sendEmail = async (options) => {
     });
     const mailOptions = {
         to: options.email,
+        cc: options.cc,
         subject: options.subject,
         text: options.message
     };

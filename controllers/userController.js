@@ -3,7 +3,6 @@ const jwt = require('jsonwebtoken');
 const appError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 const cron = require('node-cron');
-const sendEmail = require('./../utils/email');
 
 const signToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -322,24 +321,3 @@ exports.deleteTask = catchAsync(async (req, res, next) => {
         message: 'Task deleted successfully'
     });
 })
-
-cron.schedule('* * * * * *', async (req,res,next) => {
-    try {
-        // console.log('Running a task every minute');
-        const db = req.db;
-
-        const [rows] = await db.query('SELECT * FROM tasks WHERE status IN ("pending", "in_progress")');
-        console.log(rows);
-        
-        if (rows.length > 0) {
-            for (const task of rows) {
-                // await db.query('UPDATE tasks SET status = "overdue" WHERE id = ?', [task.id]);
-                
-                const [user] = await db.query('SELECT * FROM users WHERE id = ?', [task.user_id]);
-                console.log(user);
-            }
-        }
-    } catch (error) {
-        console.error('Error running cron job:', error);
-    }
-});
