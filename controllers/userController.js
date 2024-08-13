@@ -2,6 +2,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const appError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
+const cron = require('node-cron');
+const sendEmail = require('./../utils/email');
 
 const signToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -152,6 +154,21 @@ exports.createTask = catchAsync(async (req, res, next) => {
             message: 'Please provide all the details'
         });
     }
+    if(deadline < new Date()) {
+        return res.status(400).json({
+            message: 'Deadline must be of future date'
+        });
+    }
+    if(status !== 'pending' && status !== 'in_progress' && status !== 'completed') {
+        return res.status(400).json({
+            message: 'Invalid status. Status must be either pending, in_progress or completed'
+        });
+    }
+    if(priority !== 'low' && priority !== 'medium' && priority !== 'high') {
+        return res.status(400).json({
+            message: 'Invalid priority. Priority should be either low, medium or high'
+        });
+    }
 
     const query = 'INSERT INTO tasks (title, description, status, category, priority, deadline, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)';
     const [result] = await db.query(query, [title, description, status, category, priority, deadline, req.user.id]);
@@ -166,23 +183,50 @@ exports.getTasks = catchAsync(async (req, res, next) => {
     const db = req.db;
     const filters = req.query;
 
-    const query = 'SELECT * FROM tasks WHERE user_id = ?';
-    const [rows] = await db.query(query, [req.user.id]);
+    const { sort_by, order, page = 1, limit = 2 } = filters; // Default to page 1 and limit 10 if not provided
+
+    let query = 'SELECT * FROM tasks WHERE user_id = ?';
+    const queryParams = [req.user.id];
+
+    const [rows] = await db.query(query, queryParams);
 
     const filteredTasks = rows.filter(user => {
         let isValid = true;
-        for (key in filters) {
-            isValid = isValid && user[key] == filters[key];
+        for (const key in filters) {
+            if (key !== 'sort_by' && key !== 'order' && key !== 'page' && key !== 'limit') {
+                isValid = isValid && user[key] == filters[key];
+            }
         }
         return isValid;
     });
 
+    if (sort_by) {
+        const validSortFields = ['deadline', 'priority', 'created_at'];
+        if (validSortFields.includes(sort_by)) {
+            const sortOrder = order && order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+            filteredTasks.sort((a, b) => {
+                if (sortOrder === 'ASC') {
+                    return new Date(a[sort_by]) - new Date(b[sort_by]);
+                } else {
+                    return new Date(b[sort_by]) - new Date(a[sort_by]);
+                }
+            });
+        }
+    }
+
+    // Pagination logic
+    const startIndex = (page - 1) * limit;
+    const endIndex = page * limit;
+    const paginatedTasks = filteredTasks.slice(startIndex, endIndex);
+
     res.status(200).json({
         message: 'Tasks fetched successfully',
         count: filteredTasks.length,
-        tasks: filteredTasks
+        page: parseInt(page),
+        totalPages: Math.ceil(filteredTasks.length / limit),
+        tasks: paginatedTasks
     });
-})
+});
 
 exports.getTaskById = catchAsync(async (req, res, next) => {
     const db = req.db;
@@ -225,6 +269,10 @@ exports.updateTask = catchAsync(async (req, res, next) => {
         });
     }
 
+    const hstatus = req.body.status;
+    const hpriority = req.body.priority;
+    const hdeadline = req.body.deadline;
+
     const {
         title = task.title,
         description = task.description,
@@ -236,6 +284,9 @@ exports.updateTask = catchAsync(async (req, res, next) => {
 
     const query = 'UPDATE tasks SET title = ?, description = ?, status = ?, category = ?, priority = ?, deadline = ? WHERE id = ?';
     await db.query(query, [title, description, status, category, priority, deadline, taskId]);
+
+    const query2 = 'INSERT INTO task_update_history (task_id, status, priority, deadline, changed_by) VALUES (?, ?, ?, ?, ?)';
+    await db.query(query2, [taskId, hstatus, hpriority, hdeadline, userId]);
 
     res.status(200).json({
         message: 'Task updated successfully',
@@ -271,3 +322,24 @@ exports.deleteTask = catchAsync(async (req, res, next) => {
         message: 'Task deleted successfully'
     });
 })
+
+cron.schedule('* * * * * *', async (req,res,next) => {
+    try {
+        // console.log('Running a task every minute');
+        const db = req.db;
+
+        const [rows] = await db.query('SELECT * FROM tasks WHERE status IN ("pending", "in_progress")');
+        console.log(rows);
+        
+        if (rows.length > 0) {
+            for (const task of rows) {
+                // await db.query('UPDATE tasks SET status = "overdue" WHERE id = ?', [task.id]);
+                
+                const [user] = await db.query('SELECT * FROM users WHERE id = ?', [task.user_id]);
+                console.log(user);
+            }
+        }
+    } catch (error) {
+        console.error('Error running cron job:', error);
+    }
+});
