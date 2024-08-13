@@ -138,3 +138,136 @@ exports.login = catchAsync(async (req, res, next) => {
 
     createSendToken(user, 200, res);
 });
+
+exports.createTask = catchAsync(async (req, res, next) => {
+    const db = req.db;
+    if (!req.user.id) {
+        return res.status(401).json({
+            message: 'Unauthorized request'
+        });
+    }
+    const { title, description, status, category, priority, deadline } = req.body;
+    if (!title || !status || !category || !priority || !deadline) {
+        return res.status(400).json({
+            message: 'Please provide all the details'
+        });
+    }
+
+    const query = 'INSERT INTO tasks (title, description, status, category, priority, deadline, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)';
+    const [result] = await db.query(query, [title, description, status, category, priority, deadline, req.user.id]);
+
+    res.status(201).json({
+        message: 'Task created successfully',
+        task: { id: result.insertId, title, description, status, category, priority, deadline }
+    });
+});
+
+exports.getTasks = catchAsync(async (req, res, next) => {
+    const db = req.db;
+    const filters = req.query;
+
+    const query = 'SELECT * FROM tasks WHERE user_id = ?';
+    const [rows] = await db.query(query, [req.user.id]);
+
+    const filteredTasks = rows.filter(user => {
+        let isValid = true;
+        for (key in filters) {
+            isValid = isValid && user[key] == filters[key];
+        }
+        return isValid;
+    });
+
+    res.status(200).json({
+        message: 'Tasks fetched successfully',
+        count: filteredTasks.length,
+        tasks: filteredTasks
+    });
+})
+
+exports.getTaskById = catchAsync(async (req, res, next) => {
+    const db = req.db;
+    const taskId = req.params.id;
+
+    const query = 'SELECT * FROM tasks WHERE id = ?';
+    const [rows] = await db.query(query, [taskId]);
+
+    if (rows.length === 0) {
+        return res.status(404).json({
+            message: 'Task not found'
+        });
+    }
+
+    res.status(200).json({
+        message: 'Task fetched successfully',
+        task: rows[0]
+    });
+});
+
+exports.updateTask = catchAsync(async (req, res, next) => {
+    const db = req.db;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    const taskId = req.params.id;
+
+    const [rows] = await db.query('SELECT * FROM tasks WHERE id = ?', [taskId]);
+
+    if (rows.length === 0) {
+        return res.status(404).json({
+            message: 'Task not found'
+        });
+    }
+
+    const task = rows[0];
+
+    if (task.user_id !== userId && userRole !== 'admin') {
+        return res.status(401).json({
+            message: 'You are not authorized to update this task'
+        });
+    }
+
+    const {
+        title = task.title,
+        description = task.description,
+        status = task.status,
+        category = task.category,
+        priority = task.priority,
+        deadline = task.deadline
+    } = req.body;
+
+    const query = 'UPDATE tasks SET title = ?, description = ?, status = ?, category = ?, priority = ?, deadline = ? WHERE id = ?';
+    await db.query(query, [title, description, status, category, priority, deadline, taskId]);
+
+    res.status(200).json({
+        message: 'Task updated successfully',
+        task: { id: taskId, title, description, status, category, priority, deadline }
+    });
+});
+
+exports.deleteTask = catchAsync(async (req, res, next) => {
+    const db = req.db;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    const taskId = req.params.id;
+
+    const [rows] = await db.query('SELECT * FROM tasks WHERE id = ?', [taskId]);
+
+    if (rows.length === 0) {
+        return res.status(404).json({
+            message: 'Task not found'
+        });
+    }
+
+    const task = rows[0];
+
+    if (task.user_id !== userId && userRole !== 'admin') {
+        return res.status(401).json({
+            message: 'You are not authorized to delete this task'
+        });
+    }
+
+    await db.query('DELETE FROM tasks WHERE id = ?', [taskId]);
+
+    res.status(204).json({
+        message: 'Task deleted successfully'
+    });
+})
